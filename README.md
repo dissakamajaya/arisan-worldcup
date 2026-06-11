@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kocokan Piala Dunia
 
-## Getting Started
+Dashboard arisan World Cup 2026 untuk 24 peserta. Setiap peserta mendaftar dengan nama dan email, membayar lewat DOKU Checkout atau QRIS simulasi, lalu mendapat 2 negara unik dari total 48 negara.
 
-First, run the development server:
+## Fitur
+
+- Dashboard peserta dengan dua negara per peserta.
+- Maksimal 24 peserta.
+- Assignment negara dikunci hanya setelah pembayaran sukses.
+- Guard server-side agar email dan negara tidak duplikat.
+- Grup A-L World Cup 2026 dan jadwal sampai final.
+- State negara gugur sudah didukung lewat kelas `is-eliminated`.
+- API webhook DOKU di `/api/doku/notify`.
+- Mode simulasi pembayaran untuk preview tanpa credential merchant.
+
+## Mode Payment
+
+Tanpa env DOKU, aplikasi memakai mode `simulated` dan tombol bayar membuka `/payment/[orderId]`.
+
+Untuk DOKU live, set env berikut di Vercel:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+DOKU_CLIENT_ID=...
+DOKU_SECRET_KEY=...
+DOKU_BASE_URL=https://api-sandbox.doku.com
+NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Webhook/HTTP Notification DOKU diarahkan ke:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+https://your-domain.vercel.app/api/doku/notify
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Development
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Verification
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run lint
+npm run build
+STRESS_BASE_URL=http://127.0.0.1:3000 npm run stress
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Production Persistence
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Preview ini menyertakan in-memory store agar langsung deployable tanpa resource baru. Untuk publik yang durable, pakai database managed. Schema awal Supabase tersedia di `supabase/schema.sql`; setelah credentials database dipilih, storage adapter bisa diarahkan ke tabel itu.
