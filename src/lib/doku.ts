@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { ENTRY_FEE_IDR } from "./worldcup";
 
 const CHECKOUT_TARGET = "/checkout/v1/payment";
+const PAID_STATUSES = ["SUCCESS", "PAID", "SETTLEMENT", "CAPTURE"];
 
 export function isDokuConfigured() {
   return Boolean(process.env.DOKU_CLIENT_ID && process.env.DOKU_SECRET_KEY);
@@ -70,6 +71,27 @@ export function createDokuSignature(input: {
       .update(component)
       .digest("base64")}`,
   };
+}
+
+function createDokuGetSignature(input: {
+  clientId: string;
+  requestId: string;
+  timestamp: string;
+  target: string;
+  secretKey: string;
+}) {
+  const component = [
+    `Client-Id:${input.clientId}`,
+    `Request-Id:${input.requestId}`,
+    `Request-Timestamp:${input.timestamp}`,
+    `Request-Target:${input.target}`,
+  ].join("\n");
+
+  return `HMACSHA256=${createHmac("sha256", input.secretKey).update(component).digest("base64")}`;
+}
+
+export function isPaidDokuStatus(status: string) {
+  return PAID_STATUSES.includes(status.toUpperCase());
 }
 
 export async function createDokuCheckout(input: {
@@ -168,6 +190,63 @@ export async function createDokuCheckout(input: {
   return payload.response.payment.url;
 }
 
+export async function getDokuOrderStatus(orderId: string) {
+  const clientId = process.env.DOKU_CLIENT_ID;
+  const secretKey = process.env.DOKU_SECRET_KEY;
+  if (!clientId || !secretKey) {
+    throw new Error("DOKU env belum diset.");
+  }
+
+  const target = `/orders/v1/status/${encodeURIComponent(orderId)}`;
+  const requestId = randomUUID();
+  const timestamp = requestTimestamp();
+  const signature = createDokuGetSignature({
+    clientId,
+    requestId,
+    timestamp,
+    target,
+    secretKey,
+  });
+
+  const response = await fetch(`${baseUrl()}${target}`, {
+    headers: {
+      "Client-Id": clientId,
+      "Request-Id": requestId,
+      "Request-Timestamp": timestamp,
+      Signature: signature,
+    },
+    cache: "no-store",
+  });
+  const responseText = await response.text();
+
+  let payload: {
+    order?: { status?: string };
+    transaction?: { status?: string };
+    channel?: { id?: string };
+    acquirer?: { id?: string };
+    message?: string[];
+    error?: { message?: string };
+  } = {};
+  try {
+    payload = JSON.parse(responseText || "{}");
+  } catch {
+    // non-JSON response
+  }
+
+  if (!response.ok) {
+    const message =
+      payload.error?.message ?? payload.message?.join(", ") ?? "Status order DOKU gagal dicek.";
+    throw new Error(`${message} (HTTP ${response.status}, request ${requestId})`);
+  }
+
+  return {
+    orderStatus: payload.order?.status ?? "",
+    transactionStatus: payload.transaction?.status ?? "",
+    channel: payload.channel?.id ?? "",
+    acquirer: payload.acquirer?.id ?? "",
+  };
+}
+
 export async function parseDokuNotification(request: Request) {
   const body = await request.text();
   const clientId = process.env.DOKU_CLIENT_ID;
@@ -207,9 +286,7 @@ export async function parseDokuNotification(request: Request) {
 
   const transactionStatus =
     payload.transaction?.status ?? payload.payment?.status ?? payload.service?.id ?? "";
-  const isPaid = ["SUCCESS", "PAID", "SETTLEMENT", "CAPTURE"].includes(
-    transactionStatus.toUpperCase(),
-  );
+  const isPaid = isPaidDokuStatus(transactionStatus);
 
   return {
     body,
