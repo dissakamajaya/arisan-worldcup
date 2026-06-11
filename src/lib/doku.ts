@@ -108,6 +108,10 @@ export async function createDokuCheckout(input: {
     secretKeyLen: secretKey?.length,
     baseUrl: baseUrl(),
     hasEnvBaseUrl: !!process.env.DOKU_BASE_URL,
+    bodyLength: body.length,
+    bodyPreview: body.substring(0, 200),
+    signature: signature.signature.substring(0, 20) + "...",
+    digest: signature.digest,
   });
 
   const response = await fetch(fetchUrl, {
@@ -124,19 +128,27 @@ export async function createDokuCheckout(input: {
     body,
   });
 
-  const payload = (await response.json().catch(() => ({}))) as {
+  const responseText = await response.text();
+  console.error("DOKU raw response:", {
+    status: response.status,
+    statusText: response.statusText,
+    contentType: response.headers.get("content-type"),
+    bodyLength: responseText.length,
+    bodyPreview: responseText.substring(0, 300),
+  });
+
+  let payload: {
     response?: { payment?: { url?: string } };
     message?: string[];
     error?: { message?: string };
-  };
+  } = {};
+  try {
+    payload = JSON.parse(responseText || "{}");
+  } catch {
+    // non-JSON response
+  }
 
   if (!response.ok || !payload.response?.payment?.url) {
-    console.error("DOKU API Error:", {
-      status: response.status,
-      statusText: response.statusText,
-      payload: JSON.stringify(payload),
-      headers: Object.fromEntries(response.headers.entries()),
-    });
     const message =
       payload.error?.message ?? payload.message?.join(", ") ?? "DOKU checkout gagal dibuat.";
     throw new Error(message);
