@@ -71,9 +71,9 @@ export async function createDokuCheckout(input: {
       amount: ENTRY_FEE_IDR,
       invoice_number: input.orderId,
       currency: "IDR",
-      callback_url: `${origin}/payment/${input.orderId}`,
+      callback_url: `${origin}/berhasil?orderId=${input.orderId}`,
       callback_url_cancel: origin,
-      callback_url_result: `${origin}/payment/${input.orderId}`,
+      callback_url_result: `${origin}/berhasil?orderId=${input.orderId}`,
       language: "ID",
     },
     payment: {

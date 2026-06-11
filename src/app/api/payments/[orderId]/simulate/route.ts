@@ -16,7 +16,7 @@ export async function POST(
     const { orderId } = await context.params;
     const participant = await markOrderPaid(orderId);
     if (request.headers.get("accept")?.includes("text/html")) {
-      return NextResponse.redirect(new URL(`/?paid=${orderId}`, request.url), 303);
+      return NextResponse.redirect(new URL(`/berhasil?orderId=${orderId}`, request.url), 303);
     }
     return NextResponse.json({ participant });
   } catch (error) {

@@ -93,6 +93,28 @@
   line-height: 1.5;
 }
 
+.success-card {
+  justify-items: start;
+  text-align: left;
+}
+
+.success-mark {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border-radius: 999px;
+  color: white;
+  background: var(--green);
+  box-shadow: 0 16px 34px rgba(8, 107, 69, 0.2);
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.success-home {
+  min-width: 180px;
+}
+
 @media (max-width: 700px) {
   .payment-card {
     padding: 18px;
