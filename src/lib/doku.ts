@@ -101,7 +101,16 @@ export async function createDokuCheckout(input: {
     secretKey,
   });
 
-  const response = await fetch(`${baseUrl()}${CHECKOUT_TARGET}`, {
+  const fetchUrl = `${baseUrl()}${CHECKOUT_TARGET}`;
+  console.error("DOKU request:", {
+    url: fetchUrl,
+    clientId: clientId?.substring(0, 8) + "...",
+    secretKeyLen: secretKey?.length,
+    baseUrl: baseUrl(),
+    hasEnvBaseUrl: !!process.env.DOKU_BASE_URL,
+  });
+
+  const response = await fetch(fetchUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
