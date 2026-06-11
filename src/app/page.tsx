@@ -18,28 +18,38 @@ const initialState: PublicState = {
   orders: [],
   takenCountries: [],
   availableCountries: countries.map((country) => country.code),
+  countryStatuses: Object.fromEntries(countries.map((country) => [country.code, country.status])),
   mode: "simulated",
+  storage: "memory",
 };
 
 function formatIdr(value: number) {
   return `Rp${new Intl.NumberFormat("id-ID").format(value)}`;
 }
 
-function TeamChip({ code }: { code: string }) {
+function TeamChip({ code, status }: { code: string; status: "alive" | "eliminated" }) {
   const country = countryByCode(code);
   if (!country) {
     return null;
   }
 
   return (
-    <span className={`team-chip ${country.status === "eliminated" ? "is-eliminated" : ""}`}>
+    <span className={`team-chip ${status === "eliminated" ? "is-eliminated" : ""}`}>
       <span className="team-code">{country.code}</span>
       <span>{country.name}</span>
     </span>
   );
 }
 
-function ParticipantRow({ participant, index }: { participant: Participant; index: number }) {
+function ParticipantRow({
+  participant,
+  index,
+  countryStatuses,
+}: {
+  participant: Participant;
+  index: number;
+  countryStatuses: PublicState["countryStatuses"];
+}) {
   return (
     <article className="participant-row">
       <div className="participant-rank">{String(index + 1).padStart(2, "0")}</div>
@@ -49,7 +59,7 @@ function ParticipantRow({ participant, index }: { participant: Participant; inde
       </div>
       <div className="team-pair">
         {participant.countries.map((code) => (
-          <TeamChip key={code} code={code} />
+          <TeamChip key={code} code={code} status={countryStatuses[code] ?? "alive"} />
         ))}
       </div>
     </article>
@@ -200,6 +210,10 @@ export default function Home() {
             <span>Payment mode</span>
             <strong>{state.mode === "doku" ? "DOKU live" : "QRIS simulasi"}</strong>
           </div>
+          <div className="mode-line storage-line">
+            <span>Storage</span>
+            <strong>{state.storage === "supabase" ? "Supabase durable" : "Memory demo"}</strong>
+          </div>
           <div className="stats-grid">
             <div>
               <strong>{state.participants.length}/{state.maxParticipants}</strong>
@@ -235,7 +249,12 @@ export default function Home() {
         </div>
         <div className="participants-list">
           {state.participants.map((participant, index) => (
-            <ParticipantRow key={participant.id} participant={participant} index={index} />
+            <ParticipantRow
+              key={participant.id}
+              participant={participant}
+              index={index}
+              countryStatuses={state.countryStatuses}
+            />
           ))}
           {Array.from({ length: Math.max(0, Math.min(4, slotsLeft)) }).map((_, index) => (
             <article className="participant-row empty-row" key={`slot-${index}`}>
@@ -262,7 +281,7 @@ export default function Home() {
               {group.countries.map((country) => (
                 <div
                   className={`group-team ${
-                    country.status === "eliminated" ? "is-eliminated" : ""
+                    state.countryStatuses[country.code] === "eliminated" ? "is-eliminated" : ""
                   }`}
                   key={country.code}
                 >

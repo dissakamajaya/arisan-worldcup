@@ -5,5 +5,5 @@ import { getPublicState } from "@/lib/store";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(getPublicState(isDokuConfigured() ? "doku" : "simulated"));
+  return NextResponse.json(await getPublicState(isDokuConfigured() ? "doku" : "simulated"));
 }

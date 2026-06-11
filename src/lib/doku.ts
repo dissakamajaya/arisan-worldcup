@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomUUID } from "crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { ENTRY_FEE_IDR } from "./worldcup";
 
 const CHECKOUT_TARGET = "/checkout/v1/payment";
@@ -21,6 +21,12 @@ function appUrl() {
 
 function digest(body: string) {
   return createHash("sha256").update(body).digest("base64");
+}
+
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 export function createDokuSignature(input: {
@@ -126,6 +132,34 @@ export async function createDokuCheckout(input: {
 
 export async function parseDokuNotification(request: Request) {
   const body = await request.text();
+  const clientId = process.env.DOKU_CLIENT_ID;
+  const secretKey = process.env.DOKU_SECRET_KEY;
+
+  if (clientId && secretKey) {
+    const url = new URL(request.url);
+    const requestId = request.headers.get("Request-Id") ?? "";
+    const timestamp = request.headers.get("Request-Timestamp") ?? "";
+    const signatureHeader = request.headers.get("Signature") ?? "";
+    const digestHeader = request.headers.get("Digest") ?? "";
+    const signature = createDokuSignature({
+      clientId,
+      requestId,
+      timestamp,
+      target: url.pathname,
+      body,
+      secretKey,
+    });
+
+    if (
+      !requestId ||
+      !timestamp ||
+      !safeEqual(signature.digest, digestHeader) ||
+      !safeEqual(signature.signature, signatureHeader)
+    ) {
+      throw new Error("Signature DOKU tidak valid.");
+    }
+  }
+
   const payload = JSON.parse(body) as {
     order?: { invoice_number?: string };
     transaction?: { status?: string };

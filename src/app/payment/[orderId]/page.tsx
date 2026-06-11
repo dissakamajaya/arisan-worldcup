@@ -10,7 +10,7 @@ export default async function PaymentPage({
   params: Promise<{ orderId: string }>;
 }) {
   const { orderId } = await params;
-  const order = findOrder(orderId);
+  const order = await findOrder(orderId);
 
   return (
     <main className="payment-shell">
