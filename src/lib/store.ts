@@ -35,6 +35,7 @@ export type PublicState = {
   maxParticipants: number;
   countriesPerParticipant: number;
   entryFee: number;
+  countriesRevealed: boolean;
   participants: Participant[];
   orders: Order[];
   takenCountries: string[];
@@ -125,16 +126,26 @@ function publicStateFromRows(input: {
   orders: Order[];
   countryStatuses: Record<string, TeamStatus>;
 }): PublicState {
-  const takenCountries = input.participants.flatMap((participant) => participant.countries);
+  const countriesRevealed = input.participants.length >= MAX_PARTICIPANTS;
+  const takenCountries = countriesRevealed
+    ? input.participants.flatMap((participant) => participant.countries)
+    : [];
   const availableCountries = countries
     .map((country) => country.code)
     .filter((code) => !takenCountries.includes(code));
+  const participants = [...input.participants]
+    .sort((a, b) => a.paidAt.localeCompare(b.paidAt))
+    .map((participant) => ({
+      ...participant,
+      countries: countriesRevealed ? participant.countries : [],
+    }));
 
   return {
     maxParticipants: MAX_PARTICIPANTS,
     countriesPerParticipant: COUNTRIES_PER_PARTICIPANT,
     entryFee: ENTRY_FEE_IDR,
-    participants: [...input.participants].sort((a, b) => a.paidAt.localeCompare(b.paidAt)),
+    countriesRevealed,
+    participants,
     orders: [...input.orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     takenCountries,
     availableCountries,

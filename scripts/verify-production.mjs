@@ -59,11 +59,36 @@ if (participants.length > 24) {
   fail("Participant count exceeds 24.", { participants: participants.length });
 }
 
-if (countries.length !== participants.length * 2) {
-  fail("Each participant must have exactly two countries.", {
-    participants: participants.length,
-    assignedCountries: countries.length,
-  });
+if (participants.length < 24) {
+  if (state.payload.countriesRevealed !== false) {
+    fail("Country assignments must stay hidden until all 24 participants join.", {
+      participants: participants.length,
+      countriesRevealed: state.payload.countriesRevealed,
+    });
+  }
+
+  if (countries.length !== 0 || (state.payload.takenCountries ?? []).length !== 0) {
+    fail("Public state leaked country assignments before the draw is full.", {
+      participants: participants.length,
+      assignedCountries: countries.length,
+      takenCountries: state.payload.takenCountries?.length,
+    });
+  }
+}
+
+if (participants.length === 24) {
+  if (state.payload.countriesRevealed !== true) {
+    fail("Country assignments must be revealed when all 24 participants have joined.", {
+      countriesRevealed: state.payload.countriesRevealed,
+    });
+  }
+
+  if (countries.length !== participants.length * 2) {
+    fail("Each participant must have exactly two countries after reveal.", {
+      participants: participants.length,
+      assignedCountries: countries.length,
+    });
+  }
 }
 
 if (duplicateEmails.length || duplicateCountries.length) {

@@ -358,6 +358,17 @@ button {
   font-weight: 800;
 }
 
+.locked-chip {
+  border-color: #d8dedb;
+  color: var(--muted);
+  background: #f8faf8;
+}
+
+.locked-chip .team-code {
+  color: var(--green);
+  background: #e2eee7;
+}
+
 .team-code {
   display: inline-grid;
   min-width: 38px;

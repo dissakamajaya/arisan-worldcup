@@ -14,6 +14,7 @@ const initialState: PublicState = {
   maxParticipants: 24,
   countriesPerParticipant: 2,
   entryFee: ENTRY_FEE_IDR,
+  countriesRevealed: false,
   participants: [],
   orders: [],
   takenCountries: [],
@@ -45,10 +46,12 @@ function ParticipantRow({
   participant,
   index,
   countryStatuses,
+  countriesRevealed,
 }: {
   participant: Participant;
   index: number;
   countryStatuses: PublicState["countryStatuses"];
+  countriesRevealed: boolean;
 }) {
   return (
     <article className="participant-row">
@@ -58,9 +61,16 @@ function ParticipantRow({
         <span>{participant.email}</span>
       </div>
       <div className="team-pair">
-        {participant.countries.map((code) => (
-          <TeamChip key={code} code={code} status={countryStatuses[code] ?? "alive"} />
-        ))}
+        {countriesRevealed
+          ? participant.countries.map((code) => (
+              <TeamChip key={code} code={code} status={countryStatuses[code] ?? "alive"} />
+            ))
+          : Array.from({ length: 2 }).map((_, chipIndex) => (
+              <span className="team-chip locked-chip" key={chipIndex}>
+                <span className="team-code">?</span>
+                <span>Negara dikunci</span>
+              </span>
+            ))}
       </div>
     </article>
   );
@@ -167,6 +177,7 @@ export default function Home() {
   }, []);
 
   const slotsLeft = state.maxParticipants - state.participants.length;
+  const lockedCountries = state.participants.length * state.countriesPerParticipant;
   const groups = useMemo(() => groupedCountries(), []);
   const nextMatches = matches.slice(0, 14);
   const laterMatches = matches.slice(14);
@@ -193,7 +204,7 @@ export default function Home() {
           <h1>Kocokan Piala Dunia</h1>
           <p>
             Dashboard arisan teman-teman untuk 24 peserta. Setiap peserta dapat 2 negara,
-            assignment terkunci setelah pembayaran, dan negara tidak pernah duplikat.
+            assignment disimpan setelah pembayaran, dan daftar negara dibuka saat 24 slot penuh.
           </p>
           <div className="hero-actions">
             <button className="primary-button" onClick={() => setDialogOpen(true)} type="button">
@@ -220,8 +231,8 @@ export default function Home() {
               <span>peserta join</span>
             </div>
             <div>
-              <strong>{state.takenCountries.length}/48</strong>
-              <span>negara terambil</span>
+              <strong>{state.countriesRevealed ? state.takenCountries.length : lockedCountries}/48</strong>
+              <span>{state.countriesRevealed ? "negara terambil" : "negara terkunci"}</span>
             </div>
             <div>
               <strong>{slotsLeft}</strong>
@@ -245,7 +256,10 @@ export default function Home() {
       <section className="section-grid" id="peserta">
         <div className="section-heading">
           <h2>Peserta dan Negara</h2>
-          <p>Pembayaran sukses langsung muncul di dashboard dengan dua negara unik.</p>
+          <p>
+            Pembayaran sukses langsung muncul di dashboard. Negara setiap peserta dibuka setelah
+            semua 24 peserta join.
+          </p>
         </div>
         <div className="participants-list">
           {state.participants.map((participant, index) => (
@@ -254,6 +268,7 @@ export default function Home() {
               participant={participant}
               index={index}
               countryStatuses={state.countryStatuses}
+              countriesRevealed={state.countriesRevealed}
             />
           ))}
           {Array.from({ length: Math.max(0, Math.min(4, slotsLeft)) }).map((_, index) => (
