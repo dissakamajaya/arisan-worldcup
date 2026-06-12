@@ -70,7 +70,7 @@ Reference link di docs DOKU ("Please refer to this section to generate the signa
 Tiap percobaan:
 ```bash
 vercel deploy --prod
-curl -X POST "https://arisan-worldcup.vercel.app/api/join" \
+curl -X POST "https://kp2026.vercel.app/api/join" \
   -H "Content-Type: application/json" \
   -d '{"name":"Test User","email":"test-prod-N@example.com"}'
 ```
@@ -106,7 +106,7 @@ Bandingkan output dengan yang DOKU ekspektasi (kalau punya sample).
 ### Prioritas 2 — Setelah signature jalan
 
 1. **Test end-to-end di production:**
-   - Buka `https://arisan-worldcup.vercel.app`
+   - Buka `https://kp2026.vercel.app`
    - Klik "Gabung Sekarang", isi name + email
    - Akan redirect ke DOKU hosted page
    - Bayar (DOKU sandbox simulator di `https://sandbox.doku.com/integration/simulator/` kalau base URL balik ke sandbox; production pakai DOKU dashboard report)
@@ -116,13 +116,13 @@ Bandingkan output dengan yang DOKU ekspektasi (kalau punya sample).
 2. **Test webhook manual (DOKU tidak test otomatis):**
    ```bash
    # Dapatkan orderId dari /api/state
-   curl -s "https://arisan-worldcup.vercel.app/api/state" | jq '.orders[0].id'
+   curl -s "https://kp2026.vercel.app/api/state" | jq '.orders[0].id'
    # Tunggu DOKU kirim notifikasi ke /api/doku/notify — kode sudah handle valid signature
    ```
 
 3. **Test admin endpoint:**
    ```bash
-   curl -X PATCH "https://arisan-worldcup.vercel.app/api/admin/countries" \
+   curl -X PATCH "https://kp2026.vercel.app/api/admin/countries" \
      -H "Authorization: Bearer $ADMIN_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"countryCode":"MEX","status":"eliminated"}'
@@ -141,11 +141,11 @@ Bandingkan output dengan yang DOKU ekspektasi (kalau punya sample).
 | Item | Lokasi | Catatan |
 |---|---|---|
 | Supabase schema | `supabase/schema.sql` | RPC `arisan_mark_order_paid` pakai `pg_advisory_xact_lock(hashtext('arisan-worldcup-draw'))` — race-safe, **jangan hapus** |
-| DOKU env vars | Vercel production | `DOKU_CLIENT_ID`, `DOKU_SECRET_KEY`, `DOKU_BASE_URL=https://api.doku.com`, `NEXT_PUBLIC_APP_URL=https://arisan-worldcup.vercel.app` |
+| DOKU env vars | Vercel production | `DOKU_CLIENT_ID`, `DOKU_SECRET_KEY`, `DOKU_BASE_URL=https://api.doku.com`, `NEXT_PUBLIC_APP_URL=https://kp2026.vercel.app` |
 | Admin endpoint | `src/app/api/admin/countries/route.ts` | `ADMIN_TOKEN` wajib — saat ini string kosong, harus di-set manual via `vercel env add ADMIN_TOKEN production` (nilai ada di `.env` lokal) |
 | Vercel project | `dissakamajaya-2470s-projects/arisan-worldcup` | linked via `vercel link` |
-| Webhook URL DOKU | `https://arisan-worldcup.vercel.app/api/doku/notify` | DOKU dashboard → Notification URL setting |
-| App origin | `https://arisan-worldcup.vercel.app` | `NEXT_PUBLIC_APP_URL` di Vercel — `callback_url` di DOKU checkout pakai ini |
+| Webhook URL DOKU | `https://kp2026.vercel.app/api/doku/notify` | DOKU dashboard → Notification URL setting |
+| App origin | `https://kp2026.vercel.app` | `NEXT_PUBLIC_APP_URL` di Vercel — `callback_url` di DOKU checkout pakai ini |
 | Polling interval | `/payment/[orderId]/page.tsx` | 2 detik; timeout 60 detik ke `/?paid=...` |
 
 ## 5. File-file yang baru diubah (handoff diff ringkas)
@@ -178,7 +178,7 @@ Semua var diset di Vercel production via `vercel env add`:
 | `DOKU_API_KEY` | yes | `.env` lokal | tidak dipakai — keep for reference |
 | `DOKU_PUBLIC_KEY` | no | `.env` lokal (RSA public key) | tidak dipakai — keep for reference |
 | `ADMIN_TOKEN` | yes | `.env` lokal (saat ini kosong di Vercel!) | yes |
-| `NEXT_PUBLIC_APP_URL` | no | `.env` lokal (`https://arisan-worldcup.vercel.app`) | yes |
+| `NEXT_PUBLIC_APP_URL` | no | `.env` lokal (`https://kp2026.vercel.app`) | yes |
 | `ALLOW_PAYMENT_SIMULATION` | no | `false` (sudah dihapus dari kode, env var tidak relevan) | no |
 
 **Re-sync command pattern (kalau perlu):**
@@ -195,12 +195,12 @@ vercel env add VAR_NAME production --value "$VAR_NAME" [--sensitive] --yes
 cd ~/Documents/GitHub/arisan-worldcup
 npm run lint
 npm run build
-node scripts/verify-production.mjs   # hits https://arisan-worldcup.vercel.app
+node scripts/verify-production.mjs   # hits https://kp2026.vercel.app
 
 # Manual smoke
-curl -s "https://arisan-worldcup.vercel.app/api/readiness"
-curl -s "https://arisan-worldcup.vercel.app/api/state"
-curl -s -X POST "https://arisan-worldcup.vercel.app/api/join" \
+curl -s "https://kp2026.vercel.app/api/readiness"
+curl -s "https://kp2026.vercel.app/api/state"
+curl -s -X POST "https://kp2026.vercel.app/api/join" \
   -H "Content-Type: application/json" \
   -d '{"name":"Smoke Test","email":"smoke-001@example.com"}'
 
@@ -214,7 +214,7 @@ vercel logs <deployment-url>   # kalau perlu debug runtime
 
 - Mid-test `POST /api/join` di production — diblokir karena signature failure (lihat §2)
 - Deploy ulang setelah fix signature — agent berikutnya yang deploy setelah DOKU signature working
-- Setup DOKU Notification URL di DOKU dashboard — **Pa perlu manual**: login ke DOKU dashboard → Settings → Notification URL → set ke `https://arisan-worldcup.vercel.app/api/doku/notify`
+- Setup DOKU Notification URL di DOKU dashboard — **Pa perlu manual**: login ke DOKU dashboard → Settings → Notification URL → set ke `https://kp2026.vercel.app/api/doku/notify`
 - Setup DOKU Checkout payment methods preferences di DOKU dashboard — Pa putuskan mau tampilkan semua atau subset (VA, QRIS, dll)
 - Setup custom logo/warna di DOKU Checkout Page (Settings → Checkout Page → Interface Settings)
 

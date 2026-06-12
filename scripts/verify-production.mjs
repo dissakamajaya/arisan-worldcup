@@ -1,4 +1,4 @@
-const baseUrl = process.env.VERIFY_BASE_URL ?? "https://arisan-worldcup.vercel.app";
+const baseUrl = process.env.VERIFY_BASE_URL ?? "https://kp2026.vercel.app";
 const requirePublicReady = process.env.REQUIRE_PUBLIC_READY !== "false";
 
 async function getJson(path) {
