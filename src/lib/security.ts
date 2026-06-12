@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
 const DASHBOARD_COOKIE = "awc_dashboard_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 365;
 
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);

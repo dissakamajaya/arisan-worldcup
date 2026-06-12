@@ -13,6 +13,8 @@ import {
 } from "@/lib/worldcup";
 import type { Participant, PublicState } from "@/lib/store";
 
+const DASHBOARD_AUTH_MARKER = "awc_dashboard_seen";
+
 const initialState: PublicState = {
   maxParticipants: 24,
   countriesPerParticipant: 2,
@@ -282,7 +284,11 @@ function PhonePreview({
 export default function Home() {
   const [state, setState] = useState(initialState);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [authenticated, setAuthenticated] = useState(false);
+  const [authenticated, setAuthenticated] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.localStorage.getItem(DASHBOARD_AUTH_MARKER) === "true",
+  );
   const [authChecking, setAuthChecking] = useState(true);
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -312,8 +318,10 @@ export default function Home() {
       setAuthenticated(true);
       setPasswordError("");
       setPasswordInput("");
+      window.localStorage.setItem(DASHBOARD_AUTH_MARKER, "true");
       await refresh();
     } else {
+      window.localStorage.removeItem(DASHBOARD_AUTH_MARKER);
       setPasswordError(payload.error ?? "Password salah.");
     }
   }
@@ -322,9 +330,18 @@ export default function Home() {
     fetch("/api/auth/dashboard", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : { authenticated: false }))
       .then((payload: { authenticated?: boolean }) => {
-        setAuthenticated(Boolean(payload.authenticated));
+        const isAuthenticated = Boolean(payload.authenticated);
+        setAuthenticated(isAuthenticated);
+        if (isAuthenticated) {
+          window.localStorage.setItem(DASHBOARD_AUTH_MARKER, "true");
+        } else {
+          window.localStorage.removeItem(DASHBOARD_AUTH_MARKER);
+        }
       })
-      .catch(() => setAuthenticated(false))
+      .catch(() => {
+        setAuthenticated(false);
+        window.localStorage.removeItem(DASHBOARD_AUTH_MARKER);
+      })
       .finally(() => setAuthChecking(false));
     window.setTimeout(refresh, 0);
     const timer = window.setInterval(refresh, 5000);
@@ -353,7 +370,14 @@ export default function Home() {
 
   return (
     <main className="app-shell" id="beranda">
-      {!authenticated ? (
+      {authChecking && !authenticated ? (
+        <section className="login-section">
+          <div className="login-box">
+            <div className="brand-mark login-brand">KP</div>
+            <h2>Memeriksa sesi</h2>
+          </div>
+        </section>
+      ) : !authenticated ? (
         <section className="login-section">
           <div className="login-box">
             <div className="brand-mark login-brand">KP</div>
