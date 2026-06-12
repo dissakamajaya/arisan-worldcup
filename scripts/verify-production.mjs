@@ -55,8 +55,18 @@ if (state.payload.groupStandings?.A?.[0]?.code !== "MEX" || state.payload.groupS
     groupA: state.payload.groupStandings?.A,
   });
 }
+if (state.payload.groupStandings?.A?.[1]?.code !== "KOR" || state.payload.groupStandings?.A?.[1]?.points !== 3) {
+  fail("Group A standings should reflect Korea Republic 2-1 Czechia.", {
+    groupA: state.payload.groupStandings?.A,
+  });
+}
 if (!state.payload.matches?.some((match) => match.label === "Mexico vs South Africa" && match.homeScore === 2 && match.awayScore === 0 && match.status === "finished")) {
   fail("Finished match score is missing from public state.", {
+    firstMatches: state.payload.matches?.slice?.(0, 3),
+  });
+}
+if (!state.payload.matches?.some((match) => match.label === "Korea Republic vs Czechia" && match.homeScore === 2 && match.awayScore === 1 && match.status === "finished")) {
+  fail("Korea Republic vs Czechia score is missing from public state.", {
     firstMatches: state.payload.matches?.slice?.(0, 3),
   });
 }

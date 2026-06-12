@@ -13,6 +13,11 @@ import {
   drawBuckets,
   matches,
 } from "./worldcup";
+import {
+  fetchEspnScoreUpdates,
+  getCachedEspnScoreUpdates,
+  mergeLiveScoreUpdates,
+} from "./live-scores";
 
 export type PaymentStatus = "pending" | "paid" | "expired" | "failed";
 
@@ -290,9 +295,15 @@ export async function getPublicState(): Promise<PublicState> {
   if (participantsResult.error) throw new Error(participantsResult.error.message);
   if (ordersResult.error) throw new Error(ordersResult.error.message);
   if (statusesResult.error) throw new Error(statusesResult.error.message);
-  const publicMatches = matchResultsResult.error
+  let publicMatches = matchResultsResult.error
     ? matches
     : mergeMatchResults((matchResultsResult.data ?? []) as MatchResultRow[]);
+
+  try {
+    publicMatches = mergeLiveScoreUpdates(publicMatches, await getCachedEspnScoreUpdates());
+  } catch (error) {
+    console.warn("Live score sync failed", error);
+  }
 
   const countryStatuses = initialStatuses();
   for (const row of statusesResult.data ?? []) {
@@ -478,4 +489,18 @@ export async function updateMatchResult(input: {
   });
   if (error) throw new Error(error.message);
   return input;
+}
+
+export async function syncLiveScoresFromEspn() {
+  const updates = await fetchEspnScoreUpdates();
+  let changed = 0;
+  for (const update of updates) {
+    await updateMatchResult(update);
+    changed += 1;
+  }
+  return {
+    source: "espn",
+    updated: changed,
+    matches: updates,
+  };
 }

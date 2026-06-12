@@ -85,7 +85,9 @@ create table if not exists arisan_match_results (
 );
 
 insert into arisan_match_results (match_label, status, home_score, away_score)
-values ('Mexico vs South Africa', 'finished', 2, 0)
+values
+  ('Mexico vs South Africa', 'finished', 2, 0),
+  ('Korea Republic vs Czechia', 'finished', 2, 1)
 on conflict (match_label) do update
   set status = excluded.status,
       home_score = excluded.home_score,

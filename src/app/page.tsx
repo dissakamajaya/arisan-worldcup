@@ -9,6 +9,7 @@ import {
   groupedCountries,
   matches,
   splitMatchLabel,
+  type Match,
 } from "@/lib/worldcup";
 import type { Participant, PublicState } from "@/lib/store";
 
@@ -316,7 +317,7 @@ export default function Home() {
 
   // Group all matches by date for pagination
   const matchesByDate = useMemo(() => {
-    const map = new Map<string, typeof state.matches>();
+    const map = new Map<string, Match[]>();
     for (const m of state.matches) {
       if (!map.has(m.date)) map.set(m.date, []);
       map.get(m.date)!.push(m);
