@@ -3,6 +3,8 @@ import { ENTRY_FEE_IDR } from "./worldcup";
 
 const CHECKOUT_TARGET = "/checkout/v1/payment";
 const PAID_STATUSES = ["SUCCESS", "PAID", "SETTLEMENT", "CAPTURE"];
+const NOTIFICATION_MAX_BYTES = 64 * 1024;
+const NOTIFICATION_TIMESTAMP_TOLERANCE_MS = 10 * 60 * 1000;
 
 export function isDokuConfigured() {
   return Boolean(process.env.DOKU_CLIENT_ID && process.env.DOKU_SECRET_KEY);
@@ -249,32 +251,43 @@ export async function getDokuOrderStatus(orderId: string) {
 
 export async function parseDokuNotification(request: Request) {
   const body = await request.text();
+  if (Buffer.byteLength(body, "utf8") > NOTIFICATION_MAX_BYTES) {
+    throw new Error("Payload DOKU terlalu besar.");
+  }
+
   const clientId = process.env.DOKU_CLIENT_ID;
   const secretKey = process.env.DOKU_SECRET_KEY;
+  if (!clientId || !secretKey) {
+    throw new Error("DOKU_CLIENT_ID dan DOKU_SECRET_KEY wajib diset untuk webhook.");
+  }
 
-  if (clientId && secretKey) {
-    const url = new URL(request.url);
-    const requestId = request.headers.get("Request-Id") ?? "";
-    const timestamp = request.headers.get("Request-Timestamp") ?? "";
-    const signatureHeader = request.headers.get("Signature") ?? "";
-    const digestHeader = request.headers.get("Digest") ?? "";
-    const signature = createDokuSignature({
-      clientId,
-      requestId,
-      timestamp,
-      target: url.pathname,
-      body,
-      secretKey,
-    });
+  const url = new URL(request.url);
+  const requestClientId = request.headers.get("Client-Id") ?? "";
+  const requestId = request.headers.get("Request-Id") ?? "";
+  const timestamp = request.headers.get("Request-Timestamp") ?? "";
+  const signatureHeader = request.headers.get("Signature") ?? "";
+  const digestHeader = request.headers.get("Digest") ?? "";
+  const timestampMs = Date.parse(timestamp);
+  const signature = createDokuSignature({
+    clientId,
+    requestId,
+    timestamp,
+    target: url.pathname,
+    body,
+    secretKey,
+  });
 
-    if (
-      !requestId ||
-      !timestamp ||
-      !safeEqual(signature.digest, digestHeader) ||
-      !safeEqual(signature.signature, signatureHeader)
-    ) {
-      throw new Error("Signature DOKU tidak valid.");
-    }
+  if (
+    !requestClientId ||
+    !safeEqual(requestClientId, clientId) ||
+    !requestId ||
+    !timestamp ||
+    !Number.isFinite(timestampMs) ||
+    Math.abs(Date.now() - timestampMs) > NOTIFICATION_TIMESTAMP_TOLERANCE_MS ||
+    !safeEqual(signature.digest, digestHeader) ||
+    !safeEqual(signature.signature, signatureHeader)
+  ) {
+    throw new Error("Signature DOKU tidak valid.");
   }
 
   const payload = JSON.parse(body) as {

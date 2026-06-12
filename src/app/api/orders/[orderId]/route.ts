@@ -12,5 +12,11 @@ export async function GET(
   if (!order) {
     return NextResponse.json({ error: "Order tidak ditemukan." }, { status: 404 });
   }
-  return NextResponse.json({ order });
+  return NextResponse.json({
+    order: {
+      id: order.id,
+      status: order.status,
+      paidAt: order.paidAt,
+    },
+  });
 }

@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     const participant = await markOrderPaid(notification.orderId);
-    return NextResponse.json({ ok: true, participant });
+    return NextResponse.json({ ok: true, participantId: participant.id });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Webhook DOKU gagal diproses." },

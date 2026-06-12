@@ -18,6 +18,7 @@ import {
   getCachedEspnScoreUpdates,
   mergeLiveScoreUpdates,
 } from "./live-scores";
+import { maskEmail } from "./security";
 
 export type PaymentStatus = "pending" | "paid" | "expired" | "failed";
 
@@ -110,6 +111,12 @@ function normalizeEmail(email: string) {
 function assertJoinInput(name: string, email: string) {
   if (name.trim().length < 2) {
     throw new Error("Nama minimal 2 karakter.");
+  }
+  if (name.trim().length > 80) {
+    throw new Error("Nama maksimal 80 karakter.");
+  }
+  if (email.length > 254) {
+    throw new Error("Email maksimal 254 karakter.");
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error("Email tidak valid.");
@@ -237,7 +244,6 @@ async function replaceParticipantAssignments(
 
 function publicStateFromRows(input: {
   participants: Participant[];
-  orders: Order[];
   countryStatuses: Record<string, TeamStatus>;
   matches: Match[];
 }): PublicState {
@@ -252,6 +258,8 @@ function publicStateFromRows(input: {
     .sort((a, b) => a.paidAt.localeCompare(b.paidAt))
     .map((participant) => ({
       ...participant,
+      email: maskEmail(participant.email),
+      orderId: "",
       countries: countriesRevealed ? participant.countries : [],
     }));
   const buckets = drawBuckets();
@@ -262,7 +270,7 @@ function publicStateFromRows(input: {
     entryFee: ENTRY_FEE_IDR,
     countriesRevealed,
     participants,
-    orders: [...input.orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    orders: [],
     takenCountries,
     availableCountries,
     countryStatuses: input.countryStatuses,
@@ -279,21 +287,16 @@ function publicStateFromRows(input: {
 
 export async function getPublicState(): Promise<PublicState> {
   const client = requireSupabase();
-  const [participantsResult, ordersResult, statusesResult, matchResultsResult] = await Promise.all([
+  const [participantsResult, statusesResult, matchResultsResult] = await Promise.all([
     client
       .from("arisan_participants")
       .select("id,name,email,order_id,paid_at,arisan_country_assignments(country_code)")
       .order("paid_at", { ascending: true }),
-    client
-      .from("arisan_orders")
-      .select("id,name,email,amount,status,payment_url,provider,created_at,paid_at")
-      .order("created_at", { ascending: false }),
     client.from("arisan_country_status").select("country_code,status"),
     client.from("arisan_match_results").select("match_label,status,home_score,away_score"),
   ]);
 
   if (participantsResult.error) throw new Error(participantsResult.error.message);
-  if (ordersResult.error) throw new Error(ordersResult.error.message);
   if (statusesResult.error) throw new Error(statusesResult.error.message);
   let publicMatches = matchResultsResult.error
     ? matches
@@ -312,7 +315,6 @@ export async function getPublicState(): Promise<PublicState> {
 
   return publicStateFromRows({
     participants: ((participantsResult.data ?? []) as ParticipantRow[]).map(formatParticipant),
-    orders: ((ordersResult.data ?? []) as OrderRow[]).map(formatOrder),
     countryStatuses,
     matches: publicMatches,
   });

@@ -1,6 +1,6 @@
 # Kocokan Piala Dunia
 
-Dashboard arisan World Cup 2026 untuk 24 peserta. Setiap peserta mendaftar dengan nama dan email, membayar lewat DOKU Checkout atau QRIS simulasi, lalu mendapat 2 negara unik dari total 48 negara.
+Dashboard arisan World Cup 2026 untuk 24 peserta. Setiap peserta mendaftar dengan nama dan email, membayar lewat DOKU Checkout, lalu mendapat 2 negara unik dari total 48 negara.
 
 ## Fitur
 
@@ -11,14 +11,12 @@ Dashboard arisan World Cup 2026 untuk 24 peserta. Setiap peserta mendaftar denga
 - Grup A-L World Cup 2026 dan jadwal sampai final.
 - State negara gugur sudah didukung lewat kelas `is-eliminated`.
 - API webhook DOKU di `/api/doku/notify`.
-- Mode simulasi pembayaran untuk preview tanpa credential merchant.
 - Supabase production storage dengan RPC transaksi agar 2 peserta tidak bisa mendapat negara yang sama.
 - Admin API terlindungi token untuk update status negara gugur.
 - Readiness endpoint di `/api/readiness` untuk membuktikan apakah deploy sudah public-ready.
+- Password dashboard diverifikasi server-side dan disimpan sebagai cookie httpOnly.
 
 ## Mode Payment
-
-Tanpa env DOKU, aplikasi memakai mode `simulated` dan tombol bayar membuka `/payment/[orderId]`.
 
 Untuk DOKU live, set env berikut di Vercel:
 
@@ -27,6 +25,8 @@ DOKU_CLIENT_ID=...
 DOKU_SECRET_KEY=...
 DOKU_BASE_URL=https://api-sandbox.doku.com
 NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+DASHBOARD_PASSWORD=...
+DASHBOARD_SESSION_SECRET=...
 ```
 
 Webhook/HTTP Notification DOKU diarahkan ke:
@@ -35,7 +35,7 @@ Webhook/HTTP Notification DOKU diarahkan ke:
 https://your-domain.vercel.app/api/doku/notify
 ```
 
-Saat DOKU env aktif, webhook memverifikasi `Digest` dan `Signature` DOKU sebelum menandai order sebagai paid.
+Webhook wajib memverifikasi `Client-Id`, `Digest`, `Signature`, dan timestamp DOKU sebelum menandai order sebagai paid. Tanpa env DOKU yang valid, webhook gagal tertutup dan tidak akan membuat peserta paid.
 
 ## Production Database
 
@@ -45,6 +45,7 @@ Untuk public launch yang durable, buat database Supabase, jalankan `supabase/sch
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ADMIN_TOKEN=...
+CRON_SECRET=...
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` hanya dipakai di server route Vercel. Jangan expose key ini ke browser.
@@ -55,10 +56,13 @@ Set env di Vercel:
 vercel env add SUPABASE_URL production
 vercel env add SUPABASE_SERVICE_ROLE_KEY production
 vercel env add ADMIN_TOKEN production
+vercel env add CRON_SECRET production
 vercel env add DOKU_CLIENT_ID production
 vercel env add DOKU_SECRET_KEY production
 vercel env add DOKU_BASE_URL production
 vercel env add NEXT_PUBLIC_APP_URL production
+vercel env add DASHBOARD_PASSWORD production
+vercel env add DASHBOARD_SESSION_SECRET production
 vercel deploy --prod
 ```
 

@@ -73,15 +73,27 @@ if (!state.payload.matches?.some((match) => match.label === "Korea Republic vs C
 
 const participants = state.payload.participants ?? [];
 const countries = participants.flatMap((participant) => participant.countries ?? []);
-const duplicateEmails = participants
-  .map((participant) => participant.email)
-  .filter((email, index, emails) => emails.indexOf(email) !== index);
 const duplicateCountries = countries.filter(
   (country, index) => countries.indexOf(country) !== index,
 );
 
 if (participants.length > 24) {
   fail("Participant count exceeds 24.", { participants: participants.length });
+}
+
+if ((state.payload.orders ?? []).length !== 0) {
+  fail("Public state must not expose order records.", { orders: state.payload.orders.length });
+}
+
+const publicLeaks = participants.filter(
+  (participant) =>
+    participant.orderId ||
+    (typeof participant.email === "string" && !participant.email.includes("*")),
+);
+if (publicLeaks.length) {
+  fail("Public participant payload leaked order IDs or raw emails.", {
+    leaks: publicLeaks.map((participant) => ({ id: participant.id, email: participant.email, orderId: participant.orderId })),
+  });
 }
 
 if (participants.length < 24) {
@@ -116,8 +128,8 @@ if (participants.length === 24) {
   }
 }
 
-if (duplicateEmails.length || duplicateCountries.length) {
-  fail("Duplicate assignment detected.", { duplicateEmails, duplicateCountries });
+if (duplicateCountries.length) {
+  fail("Duplicate country assignment detected.", { duplicateCountries });
 }
 
 const missingOrder = await getJson("/api/orders/ARISAN-VERIFY-NOT-EXIST");

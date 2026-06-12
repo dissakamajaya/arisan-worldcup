@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isBearerTokenAuthorized } from "@/lib/security";
 import { updateMatchResult } from "@/lib/store";
 import type { MatchStatus } from "@/lib/worldcup";
 
@@ -12,12 +13,7 @@ type UpdateRequest = {
 };
 
 function isAuthorized(request: Request) {
-  const adminToken = process.env.ADMIN_TOKEN;
-  if (!adminToken) {
-    return false;
-  }
-
-  return request.headers.get("authorization") === `Bearer ${adminToken}`;
+  return isBearerTokenAuthorized(request, [process.env.ADMIN_TOKEN]);
 }
 
 export async function PATCH(request: Request) {

@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
+import { isBearerTokenAuthorized } from "@/lib/security";
 import { syncLiveScoresFromEspn } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 function isAuthorized(request: Request) {
-  const adminToken = process.env.ADMIN_TOKEN;
-  const cronSecret = process.env.CRON_SECRET;
-  const authorization = request.headers.get("authorization");
-
-  if (adminToken && authorization === `Bearer ${adminToken}`) {
-    return true;
-  }
-  if (cronSecret && authorization === `Bearer ${cronSecret}`) {
-    return true;
-  }
-  return false;
+  return isBearerTokenAuthorized(request, [process.env.ADMIN_TOKEN, process.env.CRON_SECRET]);
 }
 
 export async function GET(request: Request) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createDokuCheckout } from "@/lib/doku";
+import { clientIp, rateLimit } from "@/lib/security";
 import { createPendingOrder, deletePendingOrder, updateOrderPaymentUrl } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,11 @@ function appOrigin(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limit = rateLimit(`join:${clientIp(request)}`, 8, 10 * 60 * 1000);
+  if (!limit.allowed) {
+    return NextResponse.json({ error: "Terlalu banyak percobaan daftar." }, { status: 429 });
+  }
+
   try {
     const body = (await request.json()) as JoinRequest;
     const fallbackPaymentUrl = `${appOrigin(request)}/payment/__ORDER_ID__`;
@@ -49,7 +55,16 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    return NextResponse.json({ order });
+    return NextResponse.json({
+      order: {
+        id: order.id,
+        amount: order.amount,
+        status: order.status,
+        paymentUrl: order.paymentUrl,
+        provider: order.provider,
+        createdAt: order.createdAt,
+      },
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Gagal membuat order." },

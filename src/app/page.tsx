@@ -283,6 +283,8 @@ export default function Home() {
   const [state, setState] = useState(initialState);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
@@ -293,17 +295,37 @@ export default function Home() {
     }
   }
 
-  function checkPassword(event: FormEvent) {
+  async function checkPassword(event: FormEvent) {
     event.preventDefault();
-    if (passwordInput === "freekickCR7") {
+    setAuthSubmitting(true);
+    setPasswordError("");
+
+    const response = await fetch("/api/auth/dashboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: passwordInput }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    setAuthSubmitting(false);
+
+    if (response.ok) {
       setAuthenticated(true);
       setPasswordError("");
+      setPasswordInput("");
+      await refresh();
     } else {
-      setPasswordError("Password salah.");
+      setPasswordError(payload.error ?? "Password salah.");
     }
   }
 
   useEffect(() => {
+    fetch("/api/auth/dashboard", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : { authenticated: false }))
+      .then((payload: { authenticated?: boolean }) => {
+        setAuthenticated(Boolean(payload.authenticated));
+      })
+      .catch(() => setAuthenticated(false))
+      .finally(() => setAuthChecking(false));
     window.setTimeout(refresh, 0);
     const timer = window.setInterval(refresh, 5000);
     return () => window.clearInterval(timer);
@@ -344,10 +366,11 @@ export default function Home() {
                 onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(""); }}
                 required
                 autoFocus
+                disabled={authChecking || authSubmitting}
               />
               {passwordError ? <p className="form-error">{passwordError}</p> : null}
-              <button className="primary-button wide" type="submit">
-                Masuk
+              <button className="primary-button wide" type="submit" disabled={authChecking || authSubmitting}>
+                {authChecking ? "Memeriksa..." : authSubmitting ? "Masuk..." : "Masuk"}
               </button>
             </form>
           </div>

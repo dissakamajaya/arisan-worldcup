@@ -8,6 +8,8 @@ export type Readiness = {
     dokuClientId: boolean;
     dokuSecretKey: boolean;
     adminToken: boolean;
+    dashboardPassword: boolean;
+    dashboardSessionSecret: boolean;
     appUrl: boolean;
   };
   missing: string[];
@@ -20,6 +22,10 @@ export function getReadiness(): Readiness {
     dokuClientId: Boolean(process.env.DOKU_CLIENT_ID),
     dokuSecretKey: Boolean(process.env.DOKU_SECRET_KEY),
     adminToken: Boolean(process.env.ADMIN_TOKEN),
+    dashboardPassword: Boolean(process.env.DASHBOARD_PASSWORD || process.env.ADMIN_TOKEN),
+    dashboardSessionSecret: Boolean(
+      process.env.DASHBOARD_SESSION_SECRET || process.env.ADMIN_TOKEN || process.env.DOKU_SECRET_KEY,
+    ),
     appUrl: Boolean(process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL),
   };
   const required = {
@@ -28,6 +34,8 @@ export function getReadiness(): Readiness {
     DOKU_CLIENT_ID: checks.dokuClientId,
     DOKU_SECRET_KEY: checks.dokuSecretKey,
     ADMIN_TOKEN: checks.adminToken,
+    DASHBOARD_PASSWORD: checks.dashboardPassword,
+    DASHBOARD_SESSION_SECRET: checks.dashboardSessionSecret,
     NEXT_PUBLIC_APP_URL: checks.appUrl,
   };
   const missing = Object.entries(required)
