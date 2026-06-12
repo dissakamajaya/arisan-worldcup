@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "doku:status": "node scripts/doku-status.mjs",
+    "draw:redraw": "node scripts/redraw-balanced.mjs",
     "stress": "node scripts/stress.mjs",
     "verify:prod": "node scripts/verify-production.mjs"
   },
@@ -19,10 +20,12 @@
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "pg": "^8.21.0",
     "playwright": "^1.60.0",
     "typescript": "^5"
   },

@@ -4,8 +4,14 @@ import {
   COUNTRIES_PER_PARTICIPANT,
   ENTRY_FEE_IDR,
   MAX_PARTICIPANTS,
+  type Match,
+  type MatchStatus,
+  type StandingRow,
   type TeamStatus,
+  calculateGroupStandings,
   countries,
+  drawBuckets,
+  matches,
 } from "./worldcup";
 
 export type PaymentStatus = "pending" | "paid" | "expired" | "failed";
@@ -41,6 +47,12 @@ export type PublicState = {
   takenCountries: string[];
   availableCountries: string[];
   countryStatuses: Record<string, TeamStatus>;
+  drawBuckets: {
+    favorite: number;
+    leastFavorite: number;
+  };
+  matches: Match[];
+  groupStandings: Record<string, StandingRow[]>;
   mode: "doku";
   storage: "supabase";
 };
@@ -64,6 +76,13 @@ type ParticipantRow = {
   order_id: string;
   paid_at: string;
   arisan_country_assignments?: { country_code: string }[];
+};
+
+type MatchResultRow = {
+  match_label: string;
+  status: MatchStatus;
+  home_score: number | null;
+  away_score: number | null;
 };
 
 function requireSupabase() {
@@ -121,10 +140,101 @@ function formatParticipant(row: ParticipantRow): Participant {
   };
 }
 
+function mergeMatchResults(rows: MatchResultRow[]): Match[] {
+  const resultsByLabel = new Map(rows.map((row) => [row.match_label, row]));
+  return matches.map((match) => {
+    const row = resultsByLabel.get(match.label);
+    if (!row) {
+      return match;
+    }
+    return {
+      ...match,
+      status: row.status,
+      homeScore: row.home_score ?? undefined,
+      awayScore: row.away_score ?? undefined,
+    };
+  });
+}
+
+function pickRandom(input: string[]) {
+  return input[Math.floor(Math.random() * input.length)];
+}
+
+async function insertAssignmentPair(
+  client: ReturnType<typeof requireSupabase>,
+  participantId: string,
+  countryCodes: string[],
+) {
+  const rowsWithBucket = countryCodes.map((code) => ({
+    participant_id: participantId,
+    country_code: code,
+    draw_bucket: countries.find((country) => country.code === code)?.drawBucket ?? "least_favorite",
+  }));
+
+  const withBucket = await client.from("arisan_country_assignments").insert(rowsWithBucket);
+  if (!withBucket.error) {
+    return;
+  }
+  if (withBucket.error.code !== "PGRST204" && withBucket.error.code !== "42703") {
+    throw new Error(withBucket.error.message);
+  }
+
+  const rows = countryCodes.map((code) => ({
+    participant_id: participantId,
+    country_code: code,
+  }));
+  const fallback = await client.from("arisan_country_assignments").insert(rows);
+  if (fallback.error) throw new Error(fallback.error.message);
+}
+
+async function replaceParticipantAssignments(
+  client: ReturnType<typeof requireSupabase>,
+  participantId: string,
+) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const deleted = await client
+      .from("arisan_country_assignments")
+      .delete()
+      .eq("participant_id", participantId);
+    if (deleted.error) throw new Error(deleted.error.message);
+
+    const assigned = await client.from("arisan_country_assignments").select("country_code");
+    if (assigned.error) throw new Error(assigned.error.message);
+
+    const assignedCodes = new Set((assigned.data ?? []).map((row) => row.country_code));
+    const favoritePool = countries
+      .filter((country) => country.drawBucket === "favorite" && !assignedCodes.has(country.code))
+      .map((country) => country.code);
+    const leastFavoritePool = countries
+      .filter(
+        (country) => country.drawBucket === "least_favorite" && !assignedCodes.has(country.code),
+      )
+      .map((country) => country.code);
+
+    if (!favoritePool.length || !leastFavoritePool.length) {
+      throw new Error("Negara tersisa tidak cukup untuk bucket favorite/least favorite.");
+    }
+
+    try {
+      await insertAssignmentPair(client, participantId, [
+        pickRandom(favoritePool),
+        pickRandom(leastFavoritePool),
+      ]);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("duplicate") || attempt === 2) {
+        throw error;
+      }
+    }
+  }
+}
+
 function publicStateFromRows(input: {
   participants: Participant[];
   orders: Order[];
   countryStatuses: Record<string, TeamStatus>;
+  matches: Match[];
 }): PublicState {
   const countriesRevealed = input.participants.length >= MAX_PARTICIPANTS;
   const takenCountries = countriesRevealed
@@ -139,6 +249,7 @@ function publicStateFromRows(input: {
       ...participant,
       countries: countriesRevealed ? participant.countries : [],
     }));
+  const buckets = drawBuckets();
 
   return {
     maxParticipants: MAX_PARTICIPANTS,
@@ -150,6 +261,12 @@ function publicStateFromRows(input: {
     takenCountries,
     availableCountries,
     countryStatuses: input.countryStatuses,
+    drawBuckets: {
+      favorite: buckets.favorite.length,
+      leastFavorite: buckets.leastFavorite.length,
+    },
+    matches: input.matches,
+    groupStandings: calculateGroupStandings(input.matches),
     mode: "doku",
     storage: "supabase",
   };
@@ -157,7 +274,7 @@ function publicStateFromRows(input: {
 
 export async function getPublicState(): Promise<PublicState> {
   const client = requireSupabase();
-  const [participantsResult, ordersResult, statusesResult] = await Promise.all([
+  const [participantsResult, ordersResult, statusesResult, matchResultsResult] = await Promise.all([
     client
       .from("arisan_participants")
       .select("id,name,email,order_id,paid_at,arisan_country_assignments(country_code)")
@@ -167,11 +284,15 @@ export async function getPublicState(): Promise<PublicState> {
       .select("id,name,email,amount,status,payment_url,provider,created_at,paid_at")
       .order("created_at", { ascending: false }),
     client.from("arisan_country_status").select("country_code,status"),
+    client.from("arisan_match_results").select("match_label,status,home_score,away_score"),
   ]);
 
   if (participantsResult.error) throw new Error(participantsResult.error.message);
   if (ordersResult.error) throw new Error(ordersResult.error.message);
   if (statusesResult.error) throw new Error(statusesResult.error.message);
+  const publicMatches = matchResultsResult.error
+    ? matches
+    : mergeMatchResults((matchResultsResult.data ?? []) as MatchResultRow[]);
 
   const countryStatuses = initialStatuses();
   for (const row of statusesResult.data ?? []) {
@@ -182,6 +303,7 @@ export async function getPublicState(): Promise<PublicState> {
     participants: ((participantsResult.data ?? []) as ParticipantRow[]).map(formatParticipant),
     orders: ((ordersResult.data ?? []) as OrderRow[]).map(formatOrder),
     countryStatuses,
+    matches: publicMatches,
   });
 }
 
@@ -297,6 +419,7 @@ export async function markOrderPaid(orderId: string) {
   if (!participantId) {
     throw new Error("Pembayaran diproses tetapi peserta tidak ditemukan.");
   }
+  await replaceParticipantAssignments(client, participantId);
   return getParticipantById(participantId);
 }
 
@@ -322,4 +445,37 @@ export async function updateCountryStatus(countryCode: string, status: TeamStatu
   });
   if (error) throw new Error(error.message);
   return { countryCode, status };
+}
+
+export async function updateMatchResult(input: {
+  matchLabel: string;
+  status: MatchStatus;
+  homeScore?: number;
+  awayScore?: number;
+}) {
+  if (!matches.some((match) => match.label === input.matchLabel)) {
+    throw new Error("Match tidak dikenal.");
+  }
+
+  if (!["scheduled", "live", "finished"].includes(input.status)) {
+    throw new Error("Status match tidak valid.");
+  }
+
+  const hasScores = typeof input.homeScore === "number" && typeof input.awayScore === "number";
+  if (input.status === "scheduled" && hasScores) {
+    throw new Error("Match scheduled tidak boleh punya skor.");
+  }
+  if (input.status !== "scheduled" && !hasScores) {
+    throw new Error("Match live/finished wajib punya skor.");
+  }
+
+  const { error } = await requireSupabase().from("arisan_match_results").upsert({
+    match_label: input.matchLabel,
+    status: input.status,
+    home_score: input.status === "scheduled" ? null : input.homeScore,
+    away_score: input.status === "scheduled" ? null : input.awayScore,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  return input;
 }

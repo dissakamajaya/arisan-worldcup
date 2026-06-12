@@ -45,6 +45,21 @@ if (state.payload.storage !== "supabase") {
 if (state.payload.mode !== "doku") {
   fail("State payment mode is not DOKU.", { mode: state.payload.mode });
 }
+if (state.payload.drawBuckets?.favorite !== 24 || state.payload.drawBuckets?.leastFavorite !== 24) {
+  fail("Draw buckets must be split into 24 favorite and 24 least favorite countries.", {
+    drawBuckets: state.payload.drawBuckets,
+  });
+}
+if (state.payload.groupStandings?.A?.[0]?.code !== "MEX" || state.payload.groupStandings?.A?.[0]?.points !== 3) {
+  fail("Group A standings should reflect Mexico 2-0 South Africa.", {
+    groupA: state.payload.groupStandings?.A,
+  });
+}
+if (!state.payload.matches?.some((match) => match.label === "Mexico vs South Africa" && match.homeScore === 2 && match.awayScore === 0 && match.status === "finished")) {
+  fail("Finished match score is missing from public state.", {
+    firstMatches: state.payload.matches?.slice?.(0, 3),
+  });
+}
 
 const participants = state.payload.participants ?? [];
 const countries = participants.flatMap((participant) => participant.countries ?? []);

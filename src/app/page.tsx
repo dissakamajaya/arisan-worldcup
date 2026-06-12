@@ -3,10 +3,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ENTRY_FEE_IDR,
+  calculateGroupStandings,
   countries,
   countryByCode,
   groupedCountries,
   matches,
+  splitMatchLabel,
 } from "@/lib/worldcup";
 import type { Participant, PublicState } from "@/lib/store";
 
@@ -20,6 +22,12 @@ const initialState: PublicState = {
   takenCountries: [],
   availableCountries: countries.map((country) => country.code),
   countryStatuses: Object.fromEntries(countries.map((country) => [country.code, country.status])),
+  drawBuckets: {
+    favorite: 24,
+    leastFavorite: 24,
+  },
+  matches,
+  groupStandings: calculateGroupStandings(matches),
   mode: "doku",
   storage: "supabase",
 };
@@ -29,8 +37,18 @@ function formatIdr(value: number) {
 }
 
 function splitMatch(label: string) {
-  const [home, away] = label.split(" vs ");
-  return { home: home ?? label, away: away ?? "TBD" };
+  return splitMatchLabel(label);
+}
+
+function formatScore(match: { homeScore?: number; awayScore?: number; status?: string }) {
+  if (
+    (match.status === "finished" || match.status === "live") &&
+    typeof match.homeScore === "number" &&
+    typeof match.awayScore === "number"
+  ) {
+    return `${match.homeScore} - ${match.awayScore}`;
+  }
+  return "VS";
 }
 
 function TeamChip({ code, status }: { code: string; status: "alive" | "eliminated" }) {
@@ -185,12 +203,14 @@ function PhonePreview({
   lockedCountries,
   slotsLeft,
   countriesRevealed,
+  previewMatches,
 }: {
   participantCount: number;
   maxParticipants: number;
   lockedCountries: number;
   slotsLeft: number;
   countriesRevealed: boolean;
+  previewMatches: PublicState["matches"];
 }) {
   const progress = Math.min(100, (participantCount / maxParticipants) * 100);
 
@@ -232,13 +252,15 @@ function PhonePreview({
         ))}
       </div>
       <div className="phone-match-list">
-        {matches.slice(0, 3).map((match) => {
+        {previewMatches.slice(0, 3).map((match) => {
           const teams = splitMatch(match.label);
           return (
             <article key={`${match.date}-${match.label}`}>
               <span>{match.date}</span>
               <strong>{teams.home}</strong>
-              <small>VS</small>
+              <small className={match.status === "finished" ? "score-pill is-final" : ""}>
+                {formatScore(match)}
+              </small>
               <strong>{teams.away}</strong>
             </article>
           );
@@ -270,9 +292,9 @@ export default function Home() {
   const lockedCountries = state.participants.length * state.countriesPerParticipant;
   const progress = Math.min(100, (state.participants.length / state.maxParticipants) * 100);
   const groups = useMemo(() => groupedCountries(), []);
-  const headlineMatches = matches.slice(0, 2);
-  const nextMatches = matches.slice(0, 12);
-  const laterMatches = matches.slice(12);
+  const headlineMatches = state.matches.slice(0, 2);
+  const nextMatches = state.matches.slice(0, 12);
+  const laterMatches = state.matches.slice(12);
 
   return (
     <main className="app-shell" id="beranda">
@@ -299,8 +321,9 @@ export default function Home() {
           </div>
           <h1>Undian negara Piala Dunia 2026.</h1>
           <p>
-            Satu peserta dapat dua negara. Assignment disimpan setelah pembayaran, tapi negara
-            tetap terkunci sampai semua 24 peserta resmi join.
+            Satu peserta dapat satu negara favorit dan satu negara least favorite berdasarkan odds
+            juara. Assignment disimpan setelah pembayaran, tapi negara tetap terkunci sampai semua
+            24 peserta resmi join.
           </p>
           <div className="hero-actions">
             <button className="primary-button" onClick={() => setDialogOpen(true)} type="button">
@@ -317,7 +340,9 @@ export default function Home() {
                 <article key={`${match.date}-${match.label}`}>
                   <span>{match.date}</span>
                   <strong>{teams.home}</strong>
-                  <small>vs</small>
+                  <small className={match.status === "finished" ? "score-pill is-final" : ""}>
+                    {formatScore(match)}
+                  </small>
                   <strong>{teams.away}</strong>
                 </article>
               );
@@ -331,6 +356,7 @@ export default function Home() {
           lockedCountries={state.countriesRevealed ? state.takenCountries.length : lockedCountries}
           slotsLeft={slotsLeft}
           countriesRevealed={state.countriesRevealed}
+          previewMatches={state.matches}
         />
       </section>
 
@@ -344,8 +370,8 @@ export default function Home() {
           <strong>{state.countriesRevealed ? state.takenCountries.length : lockedCountries}/48</strong>
         </div>
         <div>
-          <span>Slot tersisa</span>
-          <strong>{slotsLeft}</strong>
+          <span>Bucket draw</span>
+          <strong>{state.drawBuckets.favorite}+{state.drawBuckets.leastFavorite}</strong>
         </div>
         <div>
           <span>Biaya join</span>
@@ -361,7 +387,7 @@ export default function Home() {
           </div>
           <p>
             Pembayaran sukses langsung masuk dashboard. Negara tiap peserta dibuka hanya saat 24
-            slot sudah penuh.
+            slot sudah penuh. Setiap peserta dapat 1 favorite + 1 least favorite.
           </p>
         </div>
         <div className="participants-list">
@@ -414,7 +440,12 @@ export default function Home() {
                 <strong>Group {group.group}</strong>
                 <span>PTS</span>
               </header>
-              {group.countries.map((country, index) => (
+              {(state.groupStandings[group.group] ?? []).map((standing, index) => {
+                const country = countryByCode(standing.code);
+                if (!country) {
+                  return null;
+                }
+                return (
                 <div
                   className={`group-team ${
                     state.countryStatuses[country.code] === "eliminated" ? "is-eliminated" : ""
@@ -424,9 +455,10 @@ export default function Home() {
                   <span>{index + 1}</span>
                   <em>{country.code}</em>
                   <strong>{country.name}</strong>
-                  <small>0</small>
+                  <small>{standing.points}</small>
                 </div>
-              ))}
+                );
+              })}
             </article>
           ))}
         </div>
@@ -449,10 +481,14 @@ export default function Home() {
                   <span className="match-date">{match.date}</span>
                   <div className="match-teams">
                     <strong>{teams.home}</strong>
-                    <small>VS</small>
+                    <small className={match.status === "finished" ? "score-pill is-final" : ""}>
+                      {formatScore(match)}
+                    </small>
                     <strong>{teams.away}</strong>
                   </div>
-                  <span className="match-stage">{match.stage}</span>
+                  <span className="match-stage">
+                    {match.status === "finished" ? "Final" : match.stage}
+                  </span>
                   <small className="match-venue">{match.venue}</small>
                 </article>
               );

@@ -4,6 +4,12 @@ const source = readFileSync(new URL("../src/lib/worldcup.ts", import.meta.url), 
 const countryCodes = [...source.matchAll(/code:\s*"([^"]+)"/g)].map((match) => match[1]);
 const groupCodes = [...source.matchAll(/group:\s*"([^"]+)"/g)].map((match) => match[1]);
 const matchLabels = [...source.matchAll(/label:\s*"([^"]+)"/g)].map((match) => match[1]);
+const favoriteCodes = [
+  ...source.matchAll(/code:\s*"([^"]+)"[^}]+drawBucket:\s*"favorite"/g),
+].map((match) => match[1]);
+const leastFavoriteCodes = [
+  ...source.matchAll(/code:\s*"([^"]+)"[^}]+drawBucket:\s*"least_favorite"/g),
+].map((match) => match[1]);
 
 const maxParticipants = 24;
 const countriesPerParticipant = 2;
@@ -26,10 +32,11 @@ function shuffle(input) {
 }
 
 function drawParticipants() {
-  const pool = shuffle(countryCodes);
+  const favoritePool = shuffle(favoriteCodes);
+  const leastFavoritePool = shuffle(leastFavoriteCodes);
   return Array.from({ length: maxParticipants }, (_, index) => ({
     email: `stress-${index + 1}@example.test`,
-    countries: pool.slice(index * countriesPerParticipant, (index + 1) * countriesPerParticipant),
+    countries: [favoritePool[index], leastFavoritePool[index]],
   }));
 }
 
@@ -37,6 +44,16 @@ assert(countryCodes.length === expectedCountries, "World Cup country count must 
   countryCount: countryCodes.length,
 });
 assert(new Set(countryCodes).size === expectedCountries, "Country codes must be unique.");
+assert(favoriteCodes.length === maxParticipants, "Favorite bucket must contain 24 countries.", {
+  favoriteCount: favoriteCodes.length,
+});
+assert(leastFavoriteCodes.length === maxParticipants, "Least favorite bucket must contain 24 countries.", {
+  leastFavoriteCount: leastFavoriteCodes.length,
+});
+assert(
+  new Set([...favoriteCodes, ...leastFavoriteCodes]).size === expectedCountries,
+  "Draw buckets must cover all countries exactly once.",
+);
 
 const groupCounts = groupCodes.reduce((counts, group) => {
   counts[group] = (counts[group] ?? 0) + 1;
@@ -59,6 +76,15 @@ for (let run = 0; run < 1000; run += 1) {
     participants.every((participant) => participant.countries.length === countriesPerParticipant),
     "Every participant must receive exactly two countries.",
   );
+  assert(
+    participants.every(
+      (participant) =>
+        favoriteCodes.includes(participant.countries[0]) &&
+        leastFavoriteCodes.includes(participant.countries[1]),
+    ),
+    "Every participant must receive one favorite and one least favorite country.",
+    { run },
+  );
   assert(new Set(assigned).size === assigned.length, "Draw must not duplicate countries.", { run });
   assert(assigned.length === expectedCountries, "Draw must allocate all 48 countries.", { run });
 }
@@ -71,6 +97,8 @@ console.log(
       maxParticipants,
       countriesPerParticipant,
       countryCount: countryCodes.length,
+      favoriteCount: favoriteCodes.length,
+      leastFavoriteCount: leastFavoriteCodes.length,
       groups: Object.keys(groupCounts).length,
       scheduleIncludesFinal: true,
     },

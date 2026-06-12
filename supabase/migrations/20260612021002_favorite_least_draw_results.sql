@@ -1,34 +1,12 @@
-create table if not exists arisan_orders (
-  id text primary key,
-  name text not null,
-  email text not null,
-  amount integer not null,
-  status text not null check (status in ('pending', 'paid', 'expired', 'failed')),
-  payment_url text not null,
-  provider text not null check (provider in ('simulated', 'doku')),
-  created_at timestamptz not null default now(),
-  paid_at timestamptz
-);
+alter table arisan_country_assignments
+  add column if not exists draw_bucket text not null default 'favorite';
 
-create unique index if not exists arisan_orders_one_pending_email
-  on arisan_orders (lower(email))
-  where status = 'pending';
+alter table arisan_country_assignments
+  drop constraint if exists arisan_country_assignments_draw_bucket_check;
 
-create table if not exists arisan_participants (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  email text not null unique,
-  order_id text not null references arisan_orders(id),
-  paid_at timestamptz not null default now()
-);
-
-create table if not exists arisan_country_assignments (
-  participant_id uuid not null references arisan_participants(id) on delete cascade,
-  country_code text not null,
-  draw_bucket text not null default 'favorite' check (draw_bucket in ('favorite', 'least_favorite')),
-  primary key (participant_id, country_code),
-  unique (country_code)
-);
+alter table arisan_country_assignments
+  add constraint arisan_country_assignments_draw_bucket_check
+  check (draw_bucket in ('favorite', 'least_favorite'));
 
 create table if not exists arisan_country_draw_buckets (
   country_code text primary key,
@@ -37,28 +15,6 @@ create table if not exists arisan_country_draw_buckets (
   source text not null default 'market_odds_snapshot_2026_06_12',
   updated_at timestamptz not null default now()
 );
-
-create table if not exists arisan_country_status (
-  country_code text primary key,
-  status text not null check (status in ('alive', 'eliminated')) default 'alive',
-  updated_at timestamptz not null default now()
-);
-
-insert into arisan_country_status (country_code, status)
-values
-  ('MEX', 'alive'), ('RSA', 'alive'), ('KOR', 'alive'), ('CZE', 'alive'),
-  ('CAN', 'alive'), ('BIH', 'alive'), ('QAT', 'alive'), ('SUI', 'alive'),
-  ('BRA', 'alive'), ('MAR', 'alive'), ('HAI', 'alive'), ('SCO', 'alive'),
-  ('USA', 'alive'), ('PAR', 'alive'), ('AUS', 'alive'), ('TUR', 'alive'),
-  ('GER', 'alive'), ('CUW', 'alive'), ('CIV', 'alive'), ('ECU', 'alive'),
-  ('NED', 'alive'), ('JPN', 'alive'), ('SWE', 'alive'), ('TUN', 'alive'),
-  ('BEL', 'alive'), ('EGY', 'alive'), ('IRN', 'alive'), ('NZL', 'alive'),
-  ('ESP', 'alive'), ('CPV', 'alive'), ('KSA', 'alive'), ('URU', 'alive'),
-  ('FRA', 'alive'), ('SEN', 'alive'), ('IRQ', 'alive'), ('NOR', 'alive'),
-  ('ARG', 'alive'), ('ALG', 'alive'), ('AUT', 'alive'), ('JOR', 'alive'),
-  ('POR', 'alive'), ('COD', 'alive'), ('UZB', 'alive'), ('COL', 'alive'),
-  ('ENG', 'alive'), ('CRO', 'alive'), ('GHA', 'alive'), ('PAN', 'alive')
-on conflict (country_code) do nothing;
 
 insert into arisan_country_draw_buckets (country_code, draw_bucket, odds_rank, source)
 values
@@ -180,21 +136,21 @@ begin
 
   select count(*) into v_available_favorite_count
   from arisan_country_draw_buckets bucket
-  where not exists (
+  where bucket.draw_bucket = 'favorite'
+  and not exists (
     select 1
     from arisan_country_assignments assignment
     where assignment.country_code = bucket.country_code
-  )
-  and bucket.draw_bucket = 'favorite';
+  );
 
   select count(*) into v_available_least_count
   from arisan_country_draw_buckets bucket
-  where not exists (
+  where bucket.draw_bucket = 'least_favorite'
+  and not exists (
     select 1
     from arisan_country_assignments assignment
     where assignment.country_code = bucket.country_code
-  )
-  and bucket.draw_bucket = 'least_favorite';
+  );
 
   if v_available_favorite_count < 1 or v_available_least_count < 1 then
     raise exception 'Negara tersisa tidak cukup.';
@@ -301,3 +257,5 @@ begin
     order by assignment.participant_id, assignment.draw_bucket;
 end;
 $$;
+
+select arisan_redraw_all_assignments();
