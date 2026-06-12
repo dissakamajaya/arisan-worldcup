@@ -494,13 +494,28 @@ export async function updateMatchResult(input: {
 export async function syncLiveScoresFromEspn() {
   const updates = await fetchEspnScoreUpdates();
   let changed = 0;
+  let persisted = true;
+  let persistError: string | undefined;
   for (const update of updates) {
-    await updateMatchResult(update);
-    changed += 1;
+    try {
+      await updateMatchResult(update);
+      changed += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("arisan_match_results")) {
+        persisted = false;
+        persistError = message;
+        break;
+      }
+      throw error;
+    }
   }
   return {
     source: "espn",
-    updated: changed,
+    updated: updates.length,
+    persisted,
+    persistedRows: changed,
+    persistError,
     matches: updates,
   };
 }
