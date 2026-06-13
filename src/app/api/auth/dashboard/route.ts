@@ -18,14 +18,16 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const limit = rateLimit(`dashboard-login:${clientIp(request)}`, 10, 10 * 60 * 1000);
-  if (!limit.allowed) {
-    return NextResponse.json({ error: "Terlalu banyak percobaan login." }, { status: 429 });
-  }
-
   try {
     const body = (await request.json()) as LoginRequest;
+
+    // Correct password always succeeds — rate limit only burns on failures so
+    // legit users sharing a NAT/CGNAT IP are never locked out by others' typos.
     if (!isDashboardPasswordValid(body.password ?? "")) {
+      const limit = rateLimit(`dashboard-login:${clientIp(request)}`, 10, 10 * 60 * 1000);
+      if (!limit.allowed) {
+        return NextResponse.json({ error: "Terlalu banyak percobaan login." }, { status: 429 });
+      }
       return NextResponse.json({ error: "Password salah." }, { status: 401 });
     }
 

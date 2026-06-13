@@ -284,11 +284,7 @@ function PhonePreview({
 export default function Home() {
   const [state, setState] = useState(initialState);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [authenticated, setAuthenticated] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.localStorage.getItem(DASHBOARD_AUTH_MARKER) === "true",
-  );
+  const [authenticated, setAuthenticated] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -327,7 +323,9 @@ export default function Home() {
   }
 
   useEffect(() => {
-    fetch("/api/auth/dashboard", { cache: "no-store" })
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    fetch("/api/auth/dashboard", { cache: "no-store", signal: controller.signal })
       .then((response) => (response.ok ? response.json() : { authenticated: false }))
       .then((payload: { authenticated?: boolean }) => {
         const isAuthenticated = Boolean(payload.authenticated);
@@ -342,10 +340,17 @@ export default function Home() {
         setAuthenticated(false);
         window.localStorage.removeItem(DASHBOARD_AUTH_MARKER);
       })
-      .finally(() => setAuthChecking(false));
+      .finally(() => {
+        window.clearTimeout(timeout);
+        setAuthChecking(false);
+      });
     window.setTimeout(refresh, 0);
     const timer = window.setInterval(refresh, 5000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+      window.clearInterval(timer);
+    };
   }, []);
 
   const slotsLeft = state.maxParticipants - state.participants.length;
@@ -370,7 +375,7 @@ export default function Home() {
 
   return (
     <main className="app-shell" id="beranda">
-      {authChecking && !authenticated ? (
+      {authChecking ? (
         <section className="login-section">
           <div className="login-box">
             <div className="brand-mark login-brand">KP</div>
